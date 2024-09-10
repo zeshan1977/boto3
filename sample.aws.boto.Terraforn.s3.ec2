@@ -1,0 +1,202 @@
+## **Summary**
+
+This application integrates **S3** storage into an AWS serverless architecture. It does the following:
+
+- Provisions an **EC2** instance running a web server.
+- Creates an **SQS** queue for message storage.
+- Deploys a **Lambda** function that processes SQS messages and uploads the messages to an **S3** bucket while also publishing a notification to **SNS**.
+- Provisions IAM roles and policies for Lambda to access **SQS**, **SNS**, and **S3**.
+
+### **1. Terraform Configuration with S3**
+
+### **1.1. S3 Bucket**
+resource "aws_s3_bucket" "my_bucket" {
+  bucket = "my-lambda-bucket-terraform-example"
+  acl    = "private"
+  tags = {
+    Name = "My S3 Bucket"
+  }
+}
+
+### **2. Lambda Function**
+
+The Lambda function will now also upload the processed message to the S3 bucket.
+
+### Terraform resource creation
+resource "aws_lambda_function" "sqs_processor_lambda" {
+  function_name = var.lambda_function_name
+  role          = aws_iam_role.lambda_role.arn
+  handler       = "lambda_function.lambda_handler"
+  runtime       = "python3.9"
+  timeout       = 15
+
+  source_code_hash = filebase64sha256("lambda.zip")
+  filename         = "lambda.zip"
+}
+
+# SQS Trigger for Lambda
+resource "aws_lambda_event_source_mapping" "sqs_trigger" {
+  event_source_arn = aws_sqs_queue.my_queue.arn
+  function_name    = aws_lambda_function.sqs_processor_lambda.arn
+  enabled          = true
+}
+```
+
+### **3. Updated Lambda IAM Policy to Access S3 via terraform **
+
+
+resource "aws_iam_policy" "lambda_sqs_sns_s3_policy" {
+  name   = "lambda_sqs_sns_s3_policy"
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Action = [
+          "sqs:ReceiveMessage",
+          "sqs:DeleteMessage",
+          "sqs:GetQueueAttributes"
+        ],
+        Effect   = "Allow",
+        Resource = aws_sqs_queue.my_queue.arn
+      },
+      {
+        Action   = "sns:Publish",
+        Effect   = "Allow",
+        Resource = aws_sns_topic.my_topic.arn
+      },
+      {
+        Action = [
+          "s3:PutObject",
+          "s3:GetObject",
+          "s3:ListBucket"
+        ],
+        Effect   = "Allow",
+        Resource = [
+          aws_s3_bucket.my_bucket.arn,
+          "${aws_s3_bucket.my_bucket.arn}/*"
+        ]
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "lambda_sqs_sns_s3_policy_attachment" {
+  role       = aws_iam_role.lambda_role.name
+  policy_arn = aws_iam_policy.lambda_sqs_sns_s3_policy.arn
+}
+```
+
+---
+
+### **4. Lambda Function Code**
+
+The Python Lambda function will now process SQS messages, publish them to an SNS topic, and upload them to an S3 bucket.
+
+```python
+import json
+import boto3
+import os
+
+s3_client = boto3.client('s3')
+sns_client = boto3.client('sns')
+
+# Define S3 bucket and SNS topic ARN
+s3_bucket_name = os.environ['S3_BUCKET_NAME']
+sns_topic_arn = 'arn:aws:sns:us-west-2:123456789012:my-sns-topic'
+
+def lambda_handler(event, context):
+    for record in event['Records']:
+        body = record['body']
+        print(f"Received message: {body}")
+        
+        # Upload message to S3
+        s3_client.put_object(
+            Bucket=s3_bucket_name,
+            Key=f"message-{record['messageId']}.txt",
+            Body=body
+        )
+        print(f"Message {record['messageId']} uploaded to S3")
+        
+        # Send the message to SNS
+        response = sns_client.publish(
+            TopicArn=sns_topic_arn,
+            Message=json.dumps({'default': body}),
+            MessageStructure='json'
+        )
+        print(f"SNS Response: {response}")
+        
+    return {
+        'statusCode': 200,
+        'body': json.dumps('Messages processed and uploaded to S3 successfully.')
+    }
+
+
+### **5. Environment Variables for Lambda Function**
+
+To pass the S3 bucket name to the Lambda function, you can use Terraform environment variables:
+
+resource "aws_lambda_function" "sqs_processor_lambda" {
+  function_name = var.lambda_function_name
+  role          = aws_iam_role.lambda_role.arn
+  handler       = "lambda_function.lambda_handler"
+  runtime       = "python3.9"
+  timeout       = 15
+
+  source_code_hash = filebase64sha256("lambda.zip")
+  filename         = "lambda.zip"
+
+  environment {
+    variables = {
+      S3_BUCKET_NAME = aws_s3_bucket.my_bucket.bucket
+    }
+  }
+}
+### **6. Outputs**
+
+
+
+add output for the S3 bucket vi TERRaFORM DIRECTIVE
+
+output "s3_bucket_name" {
+  value = aws_s3_bucket.my_bucket.bucket
+}
+
+output "ec2_public_ip" {
+  value = aws_instance.app_server.public_ip
+}
+
+output "sqs_queue_url" {
+  value = aws_sqs_queue.my_queue.url
+}
+
+output "sns_topic_arn" {
+  value = aws_sns_topic.my_topic.arn
+}
+### **7. Deploying the Application**
+
+1. **Initialize Terraform**:
+   bash
+   terraform init
+   ```
+
+2. **Plan the Deployment**:
+   bash
+   terraform plan
+   
+
+3. **Apply the Configuration**:
+   bash
+   terraform apply
+   
+
+
+### **Summary**
+
+This application integrates **S3** storage into an AWS serverless architecture. It does the following:
+
+- Provisions an **EC2** instance running a web server.
+- Creates an **SQS** queue for message storage.
+- Deploys a **Lambda** function that processes SQS messages and uploads the messages to an **S3** bucket while also publishing a notification to **SNS**.
+- Provisions IAM roles and policies for Lambda to access **SQS**, **SNS**, and **S3**.
+  
+This setup illustrates how **Terraform**, **AWS services**, and **Python (boto3)** can work together for cloud-based applications.
