@@ -190,13 +190,3 @@ output "sns_topic_arn" {
    
 
 
-### **Summary**
-
-This application integrates **S3** storage into an AWS serverless architecture. It does the following:
-
-- Provisions an **EC2** instance running a web server.
-- Creates an **SQS** queue for message storage.
-- Deploys a **Lambda** function that processes SQS messages and uploads the messages to an **S3** bucket while also publishing a notification to **SNS**.
-- Provisions IAM roles and policies for Lambda to access **SQS**, **SNS**, and **S3**.
-  
-This setup illustrates how **Terraform**, **AWS services**, and **Python (boto3)** can work together for cloud-based applications.
